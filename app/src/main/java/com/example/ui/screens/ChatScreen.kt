@@ -1,6 +1,12 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -8,6 +14,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -22,7 +29,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -31,19 +37,27 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.AttachFile
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Menu
-import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.FloatingActionButtonDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.Scaffold
@@ -51,7 +65,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDrawerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -64,28 +77,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.R
+import coil.compose.AsyncImage
 import com.example.data.local.ConversationEntity
-import com.example.data.local.UserProfileEntity
-import com.example.ui.components.ChatInputBar
 import com.example.ui.components.ChatMessageBubble
 import com.example.ui.components.OfflineBanner
 import com.example.ui.components.SidebarDrawerContent
 import com.example.ui.components.StarterPromptGrid
-import com.example.ui.theme.PrimaryIndigo
-import com.example.ui.theme.PrimaryIndigoLight
+import com.example.ui.components.VoiceInputBottomSheet
+import com.example.ui.theme.CyberBorder
+import com.example.ui.theme.CyberCardBg
+import com.example.ui.theme.CyberCardElevated
+import com.example.ui.theme.NeonMint
 import com.example.ui.theme.PureWhite
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate700
-import com.example.ui.viewmodel.AppScreen
+import com.example.ui.theme.StatusCoral
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextWhite
 import com.example.ui.viewmodel.ChatViewModel
+import com.example.ui.viewmodel.ScreenDestination
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -95,6 +112,7 @@ fun ChatScreen(
     isDarkTheme: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
@@ -105,8 +123,15 @@ fun ChatScreen(
     val inputText by viewModel.inputText.collectAsStateWithLifecycle()
     val isGenerating by viewModel.isGenerating.collectAsStateWithLifecycle()
     val isOnline by viewModel.isOnline.collectAsStateWithLifecycle()
+    val selectedAttachment by viewModel.selectedAttachmentUri.collectAsStateWithLifecycle()
 
-    var showProfileSheet by remember { mutableStateOf(false) }
+    val showVoiceSheet by viewModel.showVoiceSheet.collectAsStateWithLifecycle()
+    val isVoiceListening by viewModel.isVoiceListening.collectAsStateWithLifecycle()
+    val voiceRecognizedText by viewModel.voiceRecognizedText.collectAsStateWithLifecycle()
+    val voiceRmsLevel by viewModel.voiceRmsDb.collectAsStateWithLifecycle()
+    val voiceError by viewModel.voiceError.collectAsStateWithLifecycle()
+
+    var showClearDialog by remember { mutableStateOf(false) }
 
     val activeConversation = remember(conversations, activeConvId) {
         conversations.find { it.id == activeConvId }
@@ -114,14 +139,30 @@ fun ChatScreen(
 
     val listState = rememberLazyListState()
 
-    // Auto scroll to bottom when new messages arrive
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.setAttachmentUri(uri.toString())
+        }
+    }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            viewModel.startVoiceInput()
+        } else {
+            Toast.makeText(context, "Microphone permission required for voice input", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
     }
 
-    // Handle back button when drawer is open
     BackHandler(enabled = drawerState.isOpen) {
         scope.launch { drawerState.close() }
     }
@@ -130,7 +171,7 @@ fun ChatScreen(
         drawerState = drawerState,
         drawerContent = {
             ModalDrawerSheet(
-                drawerContainerColor = MaterialTheme.colorScheme.surface,
+                drawerContainerColor = CyberCardBg,
                 drawerTonalElevation = 4.dp
             ) {
                 SidebarDrawerContent(
@@ -142,9 +183,9 @@ fun ChatScreen(
                     onRenameConversation = { id, title -> viewModel.renameConversation(id, title) },
                     onDeleteConversation = { id -> viewModel.deleteConversation(id) },
                     onTogglePin = { id, isPinned -> viewModel.togglePin(id, isPinned) },
-                    onOpenSettings = { viewModel.navigateTo(AppScreen.SETTINGS) },
-                    onToggleTheme = { viewModel.toggleTheme() },
-                    onSignOut = { viewModel.signOut() },
+                    onOpenSettings = { viewModel.navigateTo(ScreenDestination.SETTINGS_VIEW) },
+                    onToggleTheme = { /* preserved */ },
+                    onSignOut = { /* preserved */ },
                     onCloseDrawer = { scope.launch { drawerState.close() } },
                     isDarkTheme = isDarkTheme
                 )
@@ -153,23 +194,203 @@ fun ChatScreen(
     ) {
         Scaffold(
             topBar = {
-                ChatTopHeader(
-                    title = activeConversation?.title ?: "New Chat",
-                    userProfile = userProfile,
-                    onOpenDrawer = { scope.launch { drawerState.open() } },
-                    onOpenProfile = { showProfileSheet = true }
-                )
+                // Header matching Mockup Screen 3:
+                // [Hamburger]   RM AI   [Trash/Clear]
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .statusBarsPadding(),
+                    color = CyberCardBg,
+                    tonalElevation = 2.dp
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        IconButton(
+                            onClick = { scope.launch { drawerState.open() } },
+                            modifier = Modifier.testTag("open_sidebar_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Menu,
+                                contentDescription = "Sidebar",
+                                tint = TextWhite
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                text = "RM ",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = TextWhite
+                            )
+                            Text(
+                                text = "AI",
+                                style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                                color = NeonMint
+                            )
+                        }
+
+                        IconButton(
+                            onClick = { showClearDialog = true },
+                            modifier = Modifier.testTag("clear_chat_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DeleteOutline,
+                                contentDescription = "Clear Chat",
+                                tint = TextMuted
+                            )
+                        }
+                    }
+                }
             },
             bottomBar = {
-                ChatInputBar(
-                    inputText = inputText,
-                    onInputChange = { viewModel.onInputTextChange(it) },
-                    onSendMessage = { viewModel.sendMessage() },
-                    isGenerating = isGenerating,
-                    onStopGenerating = { viewModel.stopGenerating() },
-                    isOnline = isOnline,
-                    modifier = Modifier.imePadding()
-                )
+                // Bottom Input Area matching Mockup Screen 3:
+                // [Paperclip Attach]   [Type a message...]   [Send (Teal circle)]
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding(),
+                    color = CyberCardBg,
+                    tonalElevation = 6.dp
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        // Attachment preview if user picked an image
+                        if (selectedAttachment != null) {
+                            Row(
+                                modifier = Modifier
+                                    .padding(bottom = 6.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(CyberCardElevated)
+                                    .padding(4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                AsyncImage(
+                                    model = selectedAttachment,
+                                    contentDescription = "Attachment preview",
+                                    modifier = Modifier
+                                        .size(42.dp)
+                                        .clip(RoundedCornerShape(6.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Image attached", color = TextWhite, fontSize = 12.sp)
+                                IconButton(
+                                    onClick = { viewModel.setAttachmentUri(null) },
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    Icon(Icons.Default.Close, contentDescription = "Remove", tint = StatusCoral, modifier = Modifier.size(16.dp))
+                                }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(26.dp))
+                                .background(CyberCardElevated)
+                                .border(1.dp, CyberBorder, RoundedCornerShape(26.dp))
+                                .padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Attachment paperclip button
+                            IconButton(
+                                onClick = {
+                                    photoPickerLauncher.launch(
+                                        androidx.activity.result.PickVisualMediaRequest(
+                                            ActivityResultContracts.PickVisualMedia.ImageOnly
+                                        )
+                                    )
+                                },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AttachFile,
+                                    contentDescription = "Attach image",
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Text input field
+                            androidx.compose.foundation.text.BasicTextField(
+                                value = inputText,
+                                onValueChange = { viewModel.onInputTextChange(it) },
+                                textStyle = MaterialTheme.typography.bodyLarge.copy(color = TextWhite),
+                                cursorBrush = androidx.compose.ui.graphics.SolidColor(NeonMint),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .padding(horizontal = 8.dp, vertical = 10.dp)
+                                    .testTag("chat_input_text_field"),
+                                decorationBox = { innerTextField ->
+                                    if (inputText.isEmpty() && selectedAttachment == null) {
+                                        Text(
+                                            text = "Type a message...",
+                                            style = MaterialTheme.typography.bodyLarge,
+                                            color = TextMuted
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            )
+
+                            // Mic button
+                            IconButton(
+                                onClick = {
+                                    val hasPerm = ContextCompat.checkSelfPermission(
+                                        context, Manifest.permission.RECORD_AUDIO
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                    if (hasPerm) {
+                                        viewModel.startVoiceInput()
+                                    } else {
+                                        micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                    }
+                                },
+                                modifier = Modifier.size(38.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Mic,
+                                    contentDescription = "Voice input",
+                                    tint = NeonMint,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            // Send Button (Teal circular button with arrow)
+                            val canSend = (inputText.isNotBlank() || selectedAttachment != null) && !isGenerating
+                            Box(
+                                modifier = Modifier
+                                    .size(38.dp)
+                                    .clip(CircleShape)
+                                    .background(if (canSend) NeonMint else CyberBorder)
+                                    .clickable(enabled = canSend || isGenerating) {
+                                        if (isGenerating) viewModel.stopGenerating()
+                                        else if (canSend) viewModel.sendMessage()
+                                    }
+                                    .testTag("send_message_button"),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isGenerating) {
+                                    Icon(Icons.Default.Stop, contentDescription = "Stop", tint = Color.Black, modifier = Modifier.size(18.dp))
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Send,
+                                        contentDescription = "Send",
+                                        tint = if (canSend) Color.Black else TextMuted,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             },
             contentWindowInsets = WindowInsets(0, 0, 0, 0)
         ) { paddingValues ->
@@ -180,14 +401,11 @@ fun ChatScreen(
                     .background(MaterialTheme.colorScheme.background)
             ) {
                 Column(modifier = Modifier.fillMaxSize()) {
-                    // Offline alert banner
                     OfflineBanner(isOnline = isOnline)
 
                     if (messages.isEmpty()) {
                         StarterPromptGrid(
-                            onSelectPrompt = { prompt ->
-                                viewModel.sendMessage(prompt)
-                            },
+                            onSelectPrompt = { prompt -> viewModel.sendMessage(prompt) },
                             modifier = Modifier
                                 .weight(1f)
                                 .fillMaxWidth()
@@ -235,8 +453,8 @@ fun ChatScreen(
                                 }
                             }
                         },
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        containerColor = CyberCardElevated,
+                        contentColor = NeonMint,
                         shape = CircleShape,
                         elevation = FloatingActionButtonDefaults.elevation(4.dp),
                         modifier = Modifier.size(42.dp)
@@ -252,257 +470,41 @@ fun ChatScreen(
         }
     }
 
-    // Profile & Quick Settings Modal Bottom Sheet
-    if (showProfileSheet) {
-        val sheetState = rememberModalBottomSheetState()
-        ModalBottomSheet(
-            onDismissRequest = { showProfileSheet = false },
-            sheetState = sheetState,
-            containerColor = MaterialTheme.colorScheme.surface
-        ) {
-            ProfileQuickSheetContent(
-                userProfile = userProfile,
-                onOpenFullSettings = {
-                    showProfileSheet = false
-                    viewModel.navigateTo(AppScreen.SETTINGS)
-                },
-                onToggleTheme = { viewModel.toggleTheme() },
-                onSignOut = {
-                    showProfileSheet = false
-                    viewModel.signOut()
-                },
-                isDarkTheme = isDarkTheme
-            )
-        }
-    }
-}
-
-@Composable
-fun ChatTopHeader(
-    title: String,
-    userProfile: UserProfileEntity?,
-    onOpenDrawer: () -> Unit,
-    onOpenProfile: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val profile = userProfile ?: UserProfileEntity()
-    val avatarColor = remember(profile.avatarColorHex) {
-        try {
-            Color(android.graphics.Color.parseColor(profile.avatarColorHex))
-        } catch (_: Exception) {
-            PrimaryIndigo
-        }
-    }
-    val initials = remember(profile.displayName) {
-        profile.displayName.split(" ")
-            .mapNotNull { it.firstOrNull()?.toString() }
-            .take(2)
-            .joinToString("")
-            .uppercase()
-            .ifBlank { "RM" }
-    }
-
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding(),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 3.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Hamburger icon button
-            IconButton(
-                onClick = onOpenDrawer,
-                modifier = Modifier
-                    .size(44.dp)
-                    .testTag("open_sidebar_button")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Menu,
-                    contentDescription = "Open sidebar",
-                    tint = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            // Title & Persona Badge
-            Column(
-                modifier = Modifier.weight(1f),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = "RM AI • ${getPersonaLabel(profile.aiPersona)}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = PrimaryIndigoLight
-                )
-            }
-
-            // User Avatar Circle
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(avatarColor)
-                    .clickable(onClick = onOpenProfile)
-                    .testTag("user_avatar_button"),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = initials,
-                    style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = PureWhite
-                )
-            }
-        }
-    }
-}
-
-@Composable
-fun ProfileQuickSheetContent(
-    userProfile: UserProfileEntity?,
-    onOpenFullSettings: () -> Unit,
-    onToggleTheme: () -> Unit,
-    onSignOut: () -> Unit,
-    isDarkTheme: Boolean
-) {
-    val profile = userProfile ?: UserProfileEntity()
-    val avatarColor = remember(profile.avatarColorHex) {
-        try {
-            Color(android.graphics.Color.parseColor(profile.avatarColorHex))
-        } catch (_: Exception) {
-            PrimaryIndigo
-        }
-    }
-    val initials = remember(profile.displayName) {
-        profile.displayName.split(" ")
-            .mapNotNull { it.firstOrNull()?.toString() }
-            .take(2)
-            .joinToString("")
-            .uppercase()
-            .ifBlank { "RM" }
-    }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Box(
-            modifier = Modifier
-                .size(68.dp)
-                .clip(CircleShape)
-                .background(avatarColor),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = initials,
-                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                color = PureWhite
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Text(
-            text = profile.displayName,
-            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-            color = MaterialTheme.colorScheme.onSurface
+    // Voice Input Bottom Sheet
+    if (showVoiceSheet) {
+        VoiceInputBottomSheet(
+            isListening = isVoiceListening,
+            recognizedText = voiceRecognizedText,
+            rmsLevel = voiceRmsLevel,
+            errorMessage = voiceError,
+            onStartListening = { viewModel.startVoiceInput() },
+            onStopListening = { viewModel.stopVoiceInput() },
+            onConfirmText = { text, autoSend -> viewModel.onVoiceResultConfirmed(text, autoSend) },
+            onDismiss = { viewModel.setShowVoiceSheet(false) }
         )
-        Text(
-            text = profile.email,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Slate400
-        )
-
-        Spacer(modifier = Modifier.height(20.dp))
-        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Open Full Settings
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(onClick = onOpenFullSettings)
-                .padding(horizontal = 14.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Settings,
-                    contentDescription = null,
-                    tint = PrimaryIndigo,
-                    modifier = Modifier.size(22.dp)
-                )
-                Spacer(modifier = Modifier.width(14.dp))
-                Text(
-                    text = "Settings & AI Configuration",
-                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-            }
-        }
-
-        // Toggle Theme
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
-                .clickable(onClick = onToggleTheme)
-                .padding(horizontal = 14.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                text = "Dark Mode",
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Medium),
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                text = if (isDarkTheme) "Enabled (Dark)" else "Disabled (Light)",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Slate400
-            )
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Sign Out
-        TextButton(
-            onClick = onSignOut,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(
-                text = "Sign Out",
-                color = MaterialTheme.colorScheme.error,
-                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
     }
-}
 
-fun getPersonaLabel(persona: String): String {
-    return when (persona) {
-        "CODER" -> "Code Architect"
-        "WRITER" -> "Creative Writer"
-        "TUTOR" -> "Academic Tutor"
-        else -> "Helpful Assistant"
+    // Clear Chat confirmation dialog
+    if (showClearDialog) {
+        AlertDialog(
+            onDismissRequest = { showClearDialog = false },
+            containerColor = CyberCardBg,
+            title = { Text("Clear Conversation?", color = TextWhite) },
+            text = { Text("Are you sure you want to delete all messages in this conversation?", color = TextMuted) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        activeConvId?.let { viewModel.deleteConversation(it) }
+                        showClearDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = StatusCoral)
+                ) {
+                    Text("Clear", color = PureWhite)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearDialog = false }) { Text("Cancel", color = TextMuted) }
+            }
+        )
     }
 }

@@ -31,13 +31,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.R
-import com.example.ui.theme.ElectricViolet
-import com.example.ui.theme.PrimaryIndigo
-import com.example.ui.theme.PrimaryIndigoLight
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate600
-import com.example.ui.theme.Slate700
-import com.example.ui.theme.Slate800
+import com.example.ui.theme.CyberBorder
+import com.example.ui.theme.CyberCardBg
+import com.example.ui.theme.NeonMint
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextWhite
 
 data class StarterPrompt(
     val iconEmoji: String,
@@ -47,6 +45,12 @@ data class StarterPrompt(
 )
 
 val defaultStarterPrompts = listOf(
+    StarterPrompt(
+        iconEmoji = "🗣️",
+        title = "Odia / Multilingual Chat",
+        subtitle = "Bhai, python re input output kemiti kaam kare?",
+        promptText = "Bhai, python re input output kemiti kaam kare?"
+    ),
     StarterPrompt(
         iconEmoji = "💡",
         title = "Explain Quantum Computing",
@@ -64,12 +68,6 @@ val defaultStarterPrompts = listOf(
         title = "Draft a High-Impact Pitch",
         subtitle = "Concise, professional cold email outreach",
         promptText = "Draft a concise, professional cold outreach email proposing a strategic AI partnership."
-    ),
-    StarterPrompt(
-        iconEmoji = "✈️",
-        title = "Plan a 3-Day Itinerary",
-        subtitle = "Curated schedule with culture & food gems",
-        promptText = "Create an energetic 3-day city travel itinerary packed with culture, views, and culinary spots."
     )
 )
 
@@ -85,18 +83,14 @@ fun StarterPromptGrid(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        // RM AI Logo Mark
+        // RM AI Circular Monogram
         Box(
             modifier = Modifier
                 .size(76.dp)
-                .shadow(16.dp, CircleShape, spotColor = PrimaryIndigo)
+                .shadow(16.dp, CircleShape, spotColor = NeonMint)
                 .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(PrimaryIndigo, Color(0xFF0F172A))
-                    )
-                )
-                .border(2.dp, PrimaryIndigoLight.copy(alpha = 0.6f), CircleShape),
+                .background(CyberCardBg)
+                .border(2.dp, NeonMint, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Image(
@@ -110,25 +104,35 @@ fun StarterPromptGrid(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        Text(
-            text = "RM AI",
-            style = MaterialTheme.typography.headlineMedium.copy(
-                fontWeight = FontWeight.Bold,
-                letterSpacing = (-0.5).sp
-            ),
-            color = MaterialTheme.colorScheme.onBackground
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = "RM ",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.5).sp
+                ),
+                color = TextWhite
+            )
+            Text(
+                text = "AI",
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = (-0.5).sp
+                ),
+                color = NeonMint
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
 
         Text(
-            text = "Your responsive intelligent conversation partner",
+            text = "Your personal AI conversation partner",
             style = MaterialTheme.typography.bodyMedium,
-            color = Slate400,
+            color = TextMuted,
             textAlign = TextAlign.Center
         )
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
         Text(
             text = "SUGGESTIONS",
@@ -136,7 +140,7 @@ fun StarterPromptGrid(
                 letterSpacing = 1.2.sp,
                 fontWeight = FontWeight.SemiBold
             ),
-            color = PrimaryIndigoLight,
+            color = NeonMint,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 12.dp)
@@ -167,12 +171,8 @@ fun PromptCard(
             .testTag("starter_prompt_${prompt.title.lowercase().replace(" ", "_")}")
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(
-                1.dp,
-                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.7f),
-                RoundedCornerShape(14.dp)
-            )
+            .background(CyberCardBg)
+            .border(1.dp, CyberBorder, RoundedCornerShape(14.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -182,7 +182,7 @@ fun PromptCard(
             modifier = Modifier
                 .size(38.dp)
                 .clip(CircleShape)
-                .background(PrimaryIndigo.copy(alpha = 0.12f)),
+                .background(NeonMint.copy(alpha = 0.14f)),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -195,12 +195,12 @@ fun PromptCard(
             Text(
                 text = prompt.title,
                 style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                color = MaterialTheme.colorScheme.onSurface
+                color = TextWhite
             )
             Text(
                 text = prompt.subtitle,
                 style = MaterialTheme.typography.bodySmall,
-                color = Slate400
+                color = TextMuted
             )
         }
     }

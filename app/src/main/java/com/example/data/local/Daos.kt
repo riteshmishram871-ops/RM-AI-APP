@@ -69,3 +69,48 @@ interface UserProfileDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertOrUpdate(profile: UserProfileEntity)
 }
+
+@Dao
+interface MemoryDao {
+    @Query("SELECT * FROM memories ORDER BY createdAt DESC")
+    fun getAllMemories(): Flow<List<MemoryEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insert(memory: MemoryEntity)
+
+    @Query("DELETE FROM memories WHERE id = :id")
+    suspend fun deleteById(id: String)
+
+    @Query("UPDATE memories SET isEnabled = :isEnabled WHERE id = :id")
+    suspend fun setEnabled(id: String, isEnabled: Boolean)
+
+    @Query("DELETE FROM memories")
+    suspend fun deleteAll()
+}
+
+@Dao
+interface QuickNoteDao {
+    @Query("SELECT * FROM quick_notes ORDER BY isPinned DESC, updatedAt DESC")
+    fun getAllNotes(): Flow<List<QuickNoteEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(note: QuickNoteEntity)
+
+    @Query("DELETE FROM quick_notes WHERE id = :id")
+    suspend fun deleteById(id: String)
+}
+
+@Dao
+interface ReminderDao {
+    @Query("SELECT * FROM reminders ORDER BY isCompleted ASC, dueTime ASC")
+    fun getAllReminders(): Flow<List<ReminderEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertOrUpdate(reminder: ReminderEntity)
+
+    @Query("UPDATE reminders SET isCompleted = :isCompleted WHERE id = :id")
+    suspend fun setCompleted(id: String, isCompleted: Boolean)
+
+    @Query("DELETE FROM reminders WHERE id = :id")
+    suspend fun deleteById(id: String)
+}

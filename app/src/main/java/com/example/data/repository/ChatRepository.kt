@@ -1,9 +1,15 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import com.example.data.local.AppDatabase
 import com.example.data.local.ConversationEntity
+import com.example.data.local.MemoryEntity
 import com.example.data.local.MessageEntity
+import com.example.data.local.QuickNoteEntity
+import com.example.data.local.ReminderEntity
 import com.example.data.local.UserProfileEntity
 import com.example.data.remote.GeminiApiClient
 import kotlinx.coroutines.Dispatchers
@@ -13,14 +19,20 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.withContext
 import java.util.UUID
 
-class ChatRepository(context: Context) {
+class ChatRepository(private val context: Context) {
     private val database = AppDatabase.getInstance(context)
     private val conversationDao = database.conversationDao()
     private val messageDao = database.messageDao()
     private val profileDao = database.userProfileDao()
+    private val memoryDao = database.memoryDao()
+    private val noteDao = database.quickNoteDao()
+    private val reminderDao = database.reminderDao()
 
     val allConversations: Flow<List<ConversationEntity>> = conversationDao.getAllConversations()
     val userProfile: Flow<UserProfileEntity?> = profileDao.getProfileFlow()
+    val allMemories: Flow<List<MemoryEntity>> = memoryDao.getAllMemories()
+    val allNotes: Flow<List<QuickNoteEntity>> = noteDao.getAllNotes()
+    val allReminders: Flow<List<ReminderEntity>> = reminderDao.getAllReminders()
 
     suspend fun getOrCreateProfile(): UserProfileEntity = withContext(Dispatchers.IO) {
         val existing = profileDao.getProfile()
@@ -69,12 +81,74 @@ class ChatRepository(context: Context) {
         messageDao.deleteById(messageId)
     }
 
+    // Memories
+    suspend fun addMemory(title: String, content: String, category: String = "PREFERENCE") = withContext(Dispatchers.IO) {
+        memoryDao.insert(
+            MemoryEntity(
+                id = UUID.randomUUID().toString(),
+                category = category,
+                title = title,
+                content = content
+            )
+        )
+    }
+
+    suspend fun deleteMemory(id: String) = withContext(Dispatchers.IO) {
+        memoryDao.deleteById(id)
+    }
+
+    suspend fun toggleMemoryEnabled(id: String, enabled: Boolean) = withContext(Dispatchers.IO) {
+        memoryDao.setEnabled(id, enabled)
+    }
+
+    suspend fun clearAllMemories() = withContext(Dispatchers.IO) {
+        memoryDao.deleteAll()
+    }
+
+    // Quick Notes
+    suspend fun saveNote(title: String, content: String, id: String? = null) = withContext(Dispatchers.IO) {
+        noteDao.insertOrUpdate(
+            QuickNoteEntity(
+                id = id ?: UUID.randomUUID().toString(),
+                title = title.ifBlank { "Untitled Note" },
+                content = content,
+                updatedAt = System.currentTimeMillis()
+            )
+        )
+    }
+
+    suspend fun deleteNote(id: String) = withContext(Dispatchers.IO) {
+        noteDao.deleteById(id)
+    }
+
+    // Reminders
+    suspend fun addReminder(title: String, dueTime: Long, priority: String = "MEDIUM") = withContext(Dispatchers.IO) {
+        reminderDao.insertOrUpdate(
+            ReminderEntity(
+                id = UUID.randomUUID().toString(),
+                title = title,
+                dueTime = dueTime,
+                priority = priority,
+                isCompleted = false
+            )
+        )
+    }
+
+    suspend fun toggleReminder(id: String, isCompleted: Boolean) = withContext(Dispatchers.IO) {
+        reminderDao.setCompleted(id, isCompleted)
+    }
+
+    suspend fun deleteReminder(id: String) = withContext(Dispatchers.IO) {
+        reminderDao.deleteById(id)
+    }
+
     /**
-     * Sends a message to the AI, handles streaming response animation and updates Room.
+     * Sends message with optional image attachment
      */
     suspend fun sendMessage(
         conversationId: String,
         userPrompt: String,
+        attachmentUri: String? = null,
         onChunk: (String) -> Unit = {}
     ): Result<String> = withContext(Dispatchers.IO) {
         var conv = conversationDao.getConversationById(conversationId)
@@ -90,26 +164,30 @@ class ChatRepository(context: Context) {
             conversationDao.updateTitle(conv.id, generateTitleFromPrompt(userPrompt))
         }
 
-        // 1. Insert user message
+        // Insert user message
         val userMsgId = UUID.randomUUID().toString()
         val userMsg = MessageEntity(
             id = userMsgId,
             conversationId = conversationId,
             role = "user",
             content = userPrompt.trim(),
-            createdAt = System.currentTimeMillis()
+            createdAt = System.currentTimeMillis(),
+            attachmentUri = attachmentUri
         )
         messageDao.insert(userMsg)
 
-        // 2. Fetch profile configuration
-        val profile = getOrCreateProfile()
-        val systemPrompt = getSystemPromptForPersona(profile.aiPersona)
+        // Decode attachment if any
+        val bitmap = attachmentUri?.let { decodeUriToBitmap(it) }
 
-        // 3. Prepare previous conversation turns
+        // Fetch profile
+        val profile = getOrCreateProfile()
+        val systemPrompt = getSystemPromptForPersona(profile.aiPersona, profile.selectedLanguage)
+
+        // History
         val pastMessages = messageDao.getMessagesList(conversationId)
         val historyPairs = pastMessages.map { it.role to it.content }
 
-        // 4. Insert temporary assistant message with isStreaming = true
+        // Placeholder assistant message
         val assistantMsgId = UUID.randomUUID().toString()
         val initialAssistantMsg = MessageEntity(
             id = assistantMsgId,
@@ -121,18 +199,16 @@ class ChatRepository(context: Context) {
         )
         messageDao.insert(initialAssistantMsg)
 
-        // 5. Call AI Client
         val aiResult = GeminiApiClient.generateChatResponse(
             messages = historyPairs,
             systemPrompt = systemPrompt,
             temperature = profile.temperature,
-            customApiKey = profile.customApiKey.takeIf { it.isNotBlank() }
+            customApiKey = profile.customApiKey.takeIf { it.isNotBlank() },
+            attachedBitmap = bitmap
         )
 
         return@withContext if (aiResult.isSuccess) {
             val fullText = aiResult.getOrNull() ?: ""
-
-            // Stream simulation to deliver the signature smooth conversational typing feel
             val chunks = splitIntoStreamChunks(fullText)
             val currentBuilder = StringBuilder()
 
@@ -141,17 +217,27 @@ class ChatRepository(context: Context) {
                 val partial = currentBuilder.toString()
                 onChunk(partial)
                 messageDao.updateContent(assistantMsgId, partial, isStreaming = true)
-                delay(18) // smooth reading pacing
+                delay(14)
             }
 
-            // Finalize message
             messageDao.updateContent(assistantMsgId, fullText, isStreaming = false)
             conversationDao.updateTitle(conversationId, conv.title, System.currentTimeMillis())
             Result.success(fullText)
         } else {
-            val errorMsg = "⚠️ I encountered an error: ${aiResult.exceptionOrNull()?.localizedMessage ?: "Unknown issue"}. Tap retry below to attempt again."
+            val errorMsg = "⚠️ I encountered an error. Please tap retry."
             messageDao.updateContent(assistantMsgId, errorMsg, isStreaming = false)
             Result.failure(aiResult.exceptionOrNull() ?: Exception("Unknown error"))
+        }
+    }
+
+    private fun decodeUriToBitmap(uriString: String): Bitmap? {
+        return try {
+            val uri = Uri.parse(uriString)
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                BitmapFactory.decodeStream(stream)
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 
@@ -171,29 +257,33 @@ class ChatRepository(context: Context) {
         val result = mutableListOf<String>()
         var index = 0
         while (index < text.length) {
-            // chunk size between 2 and 6 characters
-            val chunkSize = (3..7).random().coerceAtMost(text.length - index)
+            val chunkSize = (4..8).random().coerceAtMost(text.length - index)
             result.add(text.substring(index, index + chunkSize))
             index += chunkSize
         }
         return result
     }
 
-    private fun getSystemPromptForPersona(persona: String): String {
+    private fun getSystemPromptForPersona(persona: String, language: String): String {
+        val langInstruction = "Preferred Language: $language. You understand English, Hindi, and Romanized Odia fluently."
         return when (persona) {
-            "CODER" -> """You are RM AI, a senior software engineer and systems architect.
-Provide clean, idiomatic, and bug-free code blocks with syntax highlighting.
-Always explain design choices clearly, prioritize security and edge cases, and keep comments helpful and concise."""
+            "CODER" -> """You are RM AI, an expert Senior Software Engineer and Architect.
+$langInstruction
+Provide clean, idiomatic code with syntax highlighting in C++, Python, Java, Kotlin, or JavaScript.
+Keep explanations concise, secure, and focused on best practices."""
 
-            "WRITER" -> """You are RM AI, an expert copywriter, creative writer, and editorial strategist.
-Craft engaging, elegant, and punchy text with rich tone variations, persuasive hooks, and clean typography."""
+            "WRITER" -> """You are RM AI, a creative writer and storytelling strategist.
+$langInstruction
+Write engaging, eloquent, and crisp copy with expressive flair."""
 
-            "TUTOR" -> """You are RM AI, a patient, world-class educator and tutor.
-Break down complex topics using intuitive analogies, step-by-step reasoning, and friendly follow-up questions to test comprehension."""
+            "TUTOR" -> """You are RM AI, an intuitive and patient academic tutor.
+$langInstruction
+Break down complex topics step-by-step with clear analogies and examples."""
 
-            else -> """You are RM AI, an intelligent, helpful, and friendly AI assistant.
+            else -> """You are RM AI, an intelligent, friendly, and responsive personal AI assistant.
+$langInstruction
 Answer clearly and accurately. Format responses with clean Markdown, bullet points, and code blocks with language tags when appropriate.
-If you are unsure of any facts, state so instead of fabricating information. Keep your tone professional, responsive, and approachable."""
+Answer in Romanized Odia when the user addresses you in Odia (e.g. 'Bhai, kemiti karibi?'). Be helpful, respectful, and sharp."""
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -23,25 +24,24 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Key
-import androidx.compose.material.icons.filled.Palette
-import androidx.compose.material.icons.filled.Psychology
-import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -58,73 +58,100 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.data.local.UserProfileEntity
-import com.example.data.remote.GeminiApiClient
-import com.example.ui.theme.CoralError
-import com.example.ui.theme.EmeraldSuccess
-import com.example.ui.theme.PrimaryIndigo
-import com.example.ui.theme.PrimaryIndigoLight
+import com.example.ui.theme.CyberBorder
+import com.example.ui.theme.CyberCardBg
+import com.example.ui.theme.CyberCardElevated
+import com.example.ui.theme.NeonMint
 import com.example.ui.theme.PureWhite
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate700
-import com.example.ui.viewmodel.AppScreen
+import com.example.ui.theme.StatusCoral
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextWhite
 import com.example.ui.viewmodel.ChatViewModel
 
-val avatarColorPalette = listOf(
-    "#4F46E5", // Deep Indigo
-    "#7C3AED", // Electric Violet
-    "#10B981", // Emerald
-    "#F43F5E", // Rose
-    "#F59E0B", // Amber
-    "#06B6D4"  // Cyan
+data class SettingsRowItem(
+    val title: String,
+    val subtitle: String,
+    val icon: ImageVector,
+    val onClick: () -> Unit
 )
 
 @Composable
 fun SettingsScreen(
     viewModel: ChatViewModel,
-    onBack: () -> Unit,
+    onBack: () -> Unit = { viewModel.navigateBack() },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
-    val profile = userProfile ?: UserProfileEntity()
-
-    var displayName by remember(profile.displayName) { mutableStateOf(profile.displayName) }
-    var email by remember(profile.email) { mutableStateOf(profile.email) }
-    var selectedColor by remember(profile.avatarColorHex) { mutableStateOf(profile.avatarColorHex) }
-    var selectedTheme by remember(profile.themeMode) { mutableStateOf(profile.themeMode) }
-    var selectedPersona by remember(profile.aiPersona) { mutableStateOf(profile.aiPersona) }
-    var temperature by remember(profile.temperature) { mutableFloatStateOf(profile.temperature) }
-    var customApiKey by remember(profile.customApiKey) { mutableStateOf(profile.customApiKey) }
-
-    var showClearHistoryDialog by remember { mutableStateOf(false) }
-
     BackHandler { onBack() }
 
-    val avatarColor = remember(selectedColor) {
-        try {
-            Color(android.graphics.Color.parseColor(selectedColor))
-        } catch (_: Exception) {
-            PrimaryIndigo
-        }
-    }
+    val userProfile by viewModel.userProfile.collectAsStateWithLifecycle()
+    val profile = userProfile ?: UserProfileEntity()
+    val firebaseUser by viewModel.firebaseUser.collectAsStateWithLifecycle()
+    val activity = context as? Activity
 
-    val initials = remember(displayName) {
-        displayName.split(" ")
-            .mapNotNull { it.firstOrNull()?.toString() }
-            .take(2)
-            .joinToString("")
-            .uppercase()
-            .ifBlank { "RM" }
-    }
+    var showLanguageDialog by remember { mutableStateOf(false) }
+    var showVoiceDialog by remember { mutableStateOf(false) }
+    var showPrivacyDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
 
     val scrollState = rememberScrollState()
+
+    val settingsItems = listOf(
+        SettingsRowItem(
+            title = "Language",
+            subtitle = profile.selectedLanguage,
+            icon = Icons.Default.Language,
+            onClick = { showLanguageDialog = true }
+        ),
+        SettingsRowItem(
+            title = "Voice & Speech",
+            subtitle = "Voice settings & TTS playback",
+            icon = Icons.Default.Mic,
+            onClick = { showVoiceDialog = true }
+        ),
+        SettingsRowItem(
+            title = "Theme",
+            subtitle = if (profile.themeMode == "DARK") "Dark (Default)" else "Light",
+            icon = Icons.Default.DarkMode,
+            onClick = {
+                viewModel.toggleTheme()
+                Toast.makeText(context, "Theme toggled", Toast.LENGTH_SHORT).show()
+            }
+        ),
+        SettingsRowItem(
+            title = "Firebase Cloud Sync",
+            subtitle = if (firebaseUser != null) "Connected & Synced" else "Offline Mode",
+            icon = Icons.Default.CloudDone,
+            onClick = {
+                if (firebaseUser == null && activity != null) {
+                    viewModel.initiateGoogleSignIn(activity)
+                } else {
+                    Toast.makeText(context, "Firebase Firestore sync active", Toast.LENGTH_SHORT).show()
+                }
+            }
+        ),
+        SettingsRowItem(
+            title = "Privacy & Security",
+            subtitle = "Zero-trust encrypted database rules",
+            icon = Icons.Default.Security,
+            onClick = { showPrivacyDialog = true }
+        ),
+        SettingsRowItem(
+            title = "About RM AI",
+            subtitle = "v1.0.0 • Gemini 3.5 Flash",
+            icon = Icons.Default.Info,
+            onClick = { showAboutDialog = true }
+        )
+    )
 
     Surface(
         modifier = modifier.fillMaxSize(),
@@ -134,504 +161,336 @@ fun SettingsScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
+                .padding(horizontal = 18.dp)
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Header Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 10.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(
-                    onClick = onBack,
-                    modifier = Modifier.testTag("settings_back_button")
+            Column {
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 10.dp, bottom = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = "Back",
-                        tint = MaterialTheme.colorScheme.onBackground
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.testTag("settings_back_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back",
+                            tint = TextWhite
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = "Settings",
+                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                        color = TextWhite
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                // Profile Card matching Mockup Screen 10:
+                // [RM Circle Icon]   RM AI   v1.0.0
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                        .border(1.dp, CyberBorder, RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = CyberCardBg)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(54.dp)
+                                .clip(CircleShape)
+                                .background(CyberCardElevated)
+                                .border(2.dp, NeonMint, CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = (firebaseUser?.displayName ?: profile.displayName).take(2).uppercase().ifBlank { "RM" },
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = NeonMint
+                            )
+                        }
 
-                Text(
-                    text = "Settings & Profile",
-                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                    color = MaterialTheme.colorScheme.onBackground
-                )
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = firebaseUser?.displayName ?: profile.displayName,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                color = TextWhite
+                            )
+                            Text(
+                                text = firebaseUser?.email ?: if (profile.isLoggedIn) profile.email else "Guest Session",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextMuted
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(7.dp)
+                                        .clip(CircleShape)
+                                        .background(if (firebaseUser != null) NeonMint else TextMuted)
+                                )
+                                Spacer(modifier = Modifier.width(5.dp))
+                                Text(
+                                    text = if (firebaseUser != null) "Cloud Synced (Firebase)" else "Offline Cache (Room)",
+                                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                                    color = if (firebaseUser != null) NeonMint else TextMuted
+                                )
+                            }
+                        }
+
+                        if (firebaseUser != null || profile.isLoggedIn) {
+                            IconButton(
+                                onClick = {
+                                    viewModel.signOut()
+                                    Toast.makeText(context, "Signed out", Toast.LENGTH_SHORT).show()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Logout,
+                                    contentDescription = "Sign out",
+                                    tint = StatusCoral,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Settings List Items
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    settingsItems.forEach { item ->
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(16.dp))
+                                .clickable(onClick = item.onClick)
+                                .border(1.dp, CyberBorder, RoundedCornerShape(16.dp)),
+                            colors = CardDefaults.cardColors(containerColor = CyberCardBg)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(38.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(CyberCardElevated),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = item.icon,
+                                        contentDescription = item.title,
+                                        tint = NeonMint,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.width(14.dp))
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = item.title,
+                                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                        color = TextWhite
+                                    )
+                                    Text(
+                                        text = item.subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = TextMuted
+                                    )
+                                }
+
+                                Icon(
+                                    imageVector = Icons.Default.ChevronRight,
+                                    contentDescription = null,
+                                    tint = TextMuted,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-
+            // Footer Quote matching Mockup Screen 10:
+            // "Better questions create a better tomorrow. - RM AI"
             Column(
                 modifier = Modifier
-                    .weight(1f)
                     .fillMaxWidth()
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 20.dp, vertical = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(22.dp)
+                    .padding(vertical = 32.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Profile Card
-                SettingsSectionHeader(title = "PROFILE", icon = Icons.Default.Palette)
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        // Avatar preview + color picker
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(64.dp)
-                                    .clip(CircleShape)
-                                    .background(avatarColor),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = initials,
-                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = PureWhite
-                                )
-                            }
-
-                            Column {
-                                Text(
-                                    text = "Avatar Color",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Slate400
-                                )
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    avatarColorPalette.forEach { hex ->
-                                        val c = try {
-                                            Color(android.graphics.Color.parseColor(hex))
-                                        } catch (_: Exception) {
-                                            PrimaryIndigo
-                                        }
-                                        val isSelected = selectedColor.equals(hex, ignoreCase = true)
-                                        Box(
-                                            modifier = Modifier
-                                                .size(28.dp)
-                                                .clip(CircleShape)
-                                                .background(c)
-                                                .border(
-                                                    if (isSelected) 2.dp else 0.dp,
-                                                    if (isSelected) PureWhite else Color.Transparent,
-                                                    CircleShape
-                                                )
-                                                .clickable { selectedColor = hex },
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            if (isSelected) {
-                                                Icon(
-                                                    imageVector = Icons.Default.Check,
-                                                    contentDescription = null,
-                                                    tint = PureWhite,
-                                                    modifier = Modifier.size(14.dp)
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        OutlinedTextField(
-                            value = displayName,
-                            onValueChange = { displayName = it },
-                            label = { Text("Display Name") },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("display_name_input")
-                        )
-
-                        OutlinedTextField(
-                            value = email,
-                            onValueChange = { email = it },
-                            label = { Text("Email Address") },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-
-                        Button(
-                            onClick = {
-                                viewModel.updateProfile(
-                                    displayName = displayName,
-                                    email = email,
-                                    avatarColorHex = selectedColor,
-                                    themeMode = selectedTheme,
-                                    aiPersona = selectedPersona,
-                                    temperature = temperature,
-                                    customApiKey = customApiKey
-                                )
-                                Toast.makeText(context, "Profile changes saved!", Toast.LENGTH_SHORT).show()
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(46.dp)
-                                .testTag("save_profile_button"),
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(Icons.Default.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Save Profile Changes", fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-
-                // Appearance Section
-                SettingsSectionHeader(title = "APPEARANCE", icon = Icons.Default.Palette)
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Text(
-                            text = "Theme Preference",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            listOf("DARK" to "Dark", "LIGHT" to "Light", "SYSTEM" to "System").forEach { (mode, label) ->
-                                val selected = selectedTheme == mode
-                                FilterChip(
-                                    selected = selected,
-                                    onClick = {
-                                        selectedTheme = mode
-                                        viewModel.updateProfile(
-                                            displayName = displayName,
-                                            email = email,
-                                            avatarColorHex = selectedColor,
-                                            themeMode = mode,
-                                            aiPersona = selectedPersona,
-                                            temperature = temperature,
-                                            customApiKey = customApiKey
-                                        )
-                                    },
-                                    label = { Text(label) },
-                                    colors = FilterChipDefaults.filterChipColors(
-                                        selectedContainerColor = PrimaryIndigo,
-                                        selectedLabelColor = PureWhite
-                                    ),
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // AI Persona & Intelligence Section
-                SettingsSectionHeader(title = "AI PERSONA & SETTINGS", icon = Icons.Default.Psychology)
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Text(
-                            text = "Assistant Persona",
-                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-
-                        val personas = listOf(
-                            "HELPFUL" to ("🤖 Helpful Assistant" to "Balanced, clear, friendly"),
-                            "CODER" to ("💻 Code Architect" to "Code-first, type safe, concise"),
-                            "WRITER" to ("✍️ Creative Writer" to "Engaging, editorial, eloquent"),
-                            "TUTOR" to ("🎓 Academic Tutor" to "Intuitive, step-by-step breakdown")
-                        )
-
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            personas.forEach { (id, pair) ->
-                                val (title, desc) = pair
-                                val isSelected = selectedPersona == id
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(10.dp))
-                                        .background(if (isSelected) PrimaryIndigo.copy(alpha = 0.12f) else Color.Transparent)
-                                        .border(
-                                            1.dp,
-                                            if (isSelected) PrimaryIndigo else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
-                                            RoundedCornerShape(10.dp)
-                                        )
-                                        .clickable {
-                                            selectedPersona = id
-                                            viewModel.updateProfile(
-                                                displayName = displayName,
-                                                email = email,
-                                                avatarColorHex = selectedColor,
-                                                themeMode = selectedTheme,
-                                                aiPersona = id,
-                                                temperature = temperature,
-                                                customApiKey = customApiKey
-                                            )
-                                        }
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = title,
-                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = desc,
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = Slate400
-                                        )
-                                    }
-                                    if (isSelected) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = null,
-                                            tint = PrimaryIndigo,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                        // Temperature Slider
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text(
-                                    text = "Creativity (Temperature)",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = String.format("%.1f", temperature),
-                                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                    color = PrimaryIndigoLight
-                                )
-                            }
-                            Slider(
-                                value = temperature,
-                                onValueChange = {
-                                    temperature = it
-                                    viewModel.updateProfile(
-                                        displayName = displayName,
-                                        email = email,
-                                        avatarColorHex = selectedColor,
-                                        themeMode = selectedTheme,
-                                        aiPersona = selectedPersona,
-                                        temperature = it,
-                                        customApiKey = customApiKey
-                                    )
-                                },
-                                valueRange = 0.1f..1.0f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = PrimaryIndigo,
-                                    activeTrackColor = PrimaryIndigo
-                                )
-                            )
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
-                            ) {
-                                Text("Precise & Factual", style = MaterialTheme.typography.labelSmall, color = Slate400)
-                                Text("Creative & Fluent", style = MaterialTheme.typography.labelSmall, color = Slate400)
-                            }
-                        }
-                    }
-                }
-
-                // API Key & Model Configuration
-                SettingsSectionHeader(title = "API & MODEL ENGINE", icon = Icons.Default.Key)
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        val keyConfigured = GeminiApiClient.isApiKeyConfigured(customApiKey)
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(if (keyConfigured) EmeraldSuccess else PrimaryIndigoLight)
-                            )
-                            Text(
-                                text = if (keyConfigured) "AI Status: Online (Gemini 3.5 Flash)" else "AI Status: Built-in Intelligent Engine",
-                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold),
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-
-                        Text(
-                            text = "By default, RM AI is connected with server-side AI processing. You can also specify an optional custom Gemini API key below to override.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Slate400
-                        )
-
-                        OutlinedTextField(
-                            value = customApiKey,
-                            onValueChange = { customApiKey = it },
-                            label = { Text("Custom API Key (Optional)") },
-                            singleLine = true,
-                            placeholder = { Text("AIzaSy...") },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-
-                // Data Management Section
-                SettingsSectionHeader(title = "DATA & SESSIONS", icon = Icons.Default.DeleteForever)
-
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Button(
-                            onClick = { showClearHistoryDialog = true },
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Icon(
-                                Icons.Default.DeleteForever,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onErrorContainer,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                "Clear All Chat History",
-                                color = MaterialTheme.colorScheme.onErrorContainer,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        }
-
-                        OutlinedButton(
-                            onClick = { viewModel.signOut() },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Sign Out", color = CoralError, fontWeight = FontWeight.SemiBold)
-                        }
-                    }
-                }
-
-                // About section
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)),
-                    shape = RoundedCornerShape(16.dp)
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = "RM AI v1.0",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Responsive AI conversation assistant. All conversations are stored privately on your device.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Slate400
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    text = "Better questions\ncreate a better tomorrow.",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Normal,
+                        lineHeight = 20.sp
+                    ),
+                    color = TextMuted,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "– RM AI",
+                    style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = NeonMint,
+                    textAlign = TextAlign.Center
+                )
             }
         }
     }
 
-    if (showClearHistoryDialog) {
+    // Language Dialog (English, Romanized Odia, Hindi, Spanish)
+    if (showLanguageDialog) {
+        val langs = listOf("English (India)", "Romanized Odia", "Hindi", "English (US)", "Spanish")
         AlertDialog(
-            onDismissRequest = { showClearHistoryDialog = false },
-            title = { Text("Clear All Conversations?") },
-            text = { Text("This will permanently delete all past chat threads. This action cannot be undone.") },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        viewModel.clearAllConversations()
-                        showClearHistoryDialog = false
-                        Toast.makeText(context, "All conversations cleared", Toast.LENGTH_SHORT).show()
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = CoralError)
-                ) {
-                    Text("Delete Everything", color = PureWhite)
+            onDismissRequest = { showLanguageDialog = false },
+            containerColor = CyberCardBg,
+            title = { Text("Select AI Assistant Language", color = TextWhite, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    langs.forEach { lang ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (profile.selectedLanguage == lang) NeonMint.copy(alpha = 0.15f) else Color.Transparent)
+                                .clickable {
+                                    viewModel.updateProfile(
+                                        displayName = profile.displayName,
+                                        email = profile.email,
+                                        avatarColorHex = profile.avatarColorHex,
+                                        themeMode = profile.themeMode,
+                                        aiPersona = profile.aiPersona,
+                                        temperature = profile.temperature,
+                                        customApiKey = profile.customApiKey,
+                                        selectedLanguage = lang,
+                                        isMemoryEnabled = profile.isMemoryEnabled
+                                    )
+                                    showLanguageDialog = false
+                                }
+                                .padding(12.dp)
+                        ) {
+                            Text(lang, color = if (profile.selectedLanguage == lang) NeonMint else TextWhite)
+                        }
+                    }
                 }
             },
+            confirmButton = {},
             dismissButton = {
-                TextButton(onClick = { showClearHistoryDialog = false }) {
-                    Text("Cancel")
-                }
+                TextButton(onClick = { showLanguageDialog = false }) { Text("Close", color = TextMuted) }
             }
         )
     }
-}
 
-@Composable
-fun SettingsSectionHeader(
-    title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = PrimaryIndigoLight,
-            modifier = Modifier.size(16.dp)
+    // Voice & Speech TTS settings dialog
+    if (showVoiceDialog) {
+        var testRate by remember { mutableFloatStateOf(profile.ttsSpeechRate) }
+        AlertDialog(
+            onDismissRequest = { showVoiceDialog = false },
+            containerColor = CyberCardBg,
+            title = { Text("Voice & Speech Settings", color = TextWhite, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Speech Rate (Speed): ${String.format("%.1fx", testRate)}", color = TextMuted)
+                    Slider(
+                        value = testRate,
+                        onValueChange = { testRate = it },
+                        valueRange = 0.5f..2.0f,
+                        colors = SliderDefaults.colors(thumbColor = NeonMint, activeTrackColor = NeonMint)
+                    )
+
+                    Button(
+                        onClick = { viewModel.speakText("Hello Ritesh! This is RM AI speaking to you.") },
+                        colors = ButtonDefaults.buttonColors(containerColor = CyberCardElevated),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.RecordVoiceOver, contentDescription = null, tint = NeonMint)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Test Voice Audio", color = TextWhite)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showVoiceDialog = false }) { Text("Done", color = NeonMint) }
+            }
         )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall.copy(
-                fontWeight = FontWeight.Bold,
-                letterSpacing = 1.2.sp
-            ),
-            color = PrimaryIndigoLight
+    }
+
+    // Privacy Dialog
+    if (showPrivacyDialog) {
+        AlertDialog(
+            onDismissRequest = { showPrivacyDialog = false },
+            containerColor = CyberCardBg,
+            title = { Text("Privacy & Security", color = TextWhite, fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "• All your conversations, notes, and memories are stored on-device in a protected Room SQLite database.",
+                        color = TextMuted,
+                        fontSize = 13.sp
+                    )
+                    Text(
+                        "• API calls are securely authenticated without leaking personal credentials.",
+                        color = TextMuted,
+                        fontSize = 13.sp
+                    )
+
+                    Button(
+                        onClick = {
+                            viewModel.clearAllConversations()
+                            Toast.makeText(context, "All chat history wiped", Toast.LENGTH_SHORT).show()
+                            showPrivacyDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = StatusCoral),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Delete All Chat History", color = PureWhite)
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showPrivacyDialog = false }) { Text("Close", color = NeonMint) }
+            }
+        )
+    }
+
+    // About Dialog
+    if (showAboutDialog) {
+        AlertDialog(
+            onDismissRequest = { showAboutDialog = false },
+            containerColor = CyberCardBg,
+            title = { Text("About RM AI", color = TextWhite, fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "RM AI — Your Personal AI Assistant\nVersion 1.0.0\n\nEquipped with multilingual speech recognition, text-to-speech, camera analysis, and smart tools.",
+                    color = TextMuted,
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { showAboutDialog = false }) { Text("OK", color = NeonMint) }
+            }
         )
     }
 }

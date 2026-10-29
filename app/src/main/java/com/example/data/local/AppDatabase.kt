@@ -9,15 +9,21 @@ import androidx.room.RoomDatabase
     entities = [
         ConversationEntity::class,
         MessageEntity::class,
-        UserProfileEntity::class
+        UserProfileEntity::class,
+        MemoryEntity::class,
+        QuickNoteEntity::class,
+        ReminderEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
     abstract fun conversationDao(): ConversationDao
     abstract fun messageDao(): MessageDao
     abstract fun userProfileDao(): UserProfileDao
+    abstract fun memoryDao(): MemoryDao
+    abstract fun quickNoteDao(): QuickNoteDao
+    abstract fun reminderDao(): ReminderDao
 
     companion object {
         @Volatile

@@ -1,6 +1,11 @@
 package com.example.ui.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -19,11 +24,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,23 +37,22 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.ui.theme.CoralError
 import com.example.ui.theme.PrimaryIndigo
+import com.example.ui.theme.PrimaryIndigoLight
 import com.example.ui.theme.PureWhite
 import com.example.ui.theme.Slate400
 import com.example.ui.theme.Slate500
-import com.example.ui.theme.Slate700
 
 @Composable
 fun ChatInputBar(
@@ -58,8 +62,21 @@ fun ChatInputBar(
     isGenerating: Boolean,
     onStopGenerating: () -> Unit,
     isOnline: Boolean,
+    onStartVoiceInput: () -> Unit,
+    isVoiceListening: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    val infiniteTransition = rememberInfiniteTransition(label = "mic_pulse")
+    val micScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.18f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(600),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "micScale"
+    )
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -82,7 +99,7 @@ fun ChatInputBar(
                         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f),
                         RoundedCornerShape(24.dp)
                     )
-                    .padding(start = 16.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
+                    .padding(start = 14.dp, end = 6.dp, top = 4.dp, bottom = 4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Multi-line Input Field
@@ -94,7 +111,7 @@ fun ChatInputBar(
                 ) {
                     if (inputText.isEmpty()) {
                         Text(
-                            text = if (isOnline) "Message RM AI…" else "Offline — ready when connected…",
+                            text = if (isOnline) "Message RM AI or speak…" else "Offline — ready when connected…",
                             style = MaterialTheme.typography.bodyLarge,
                             color = Slate400
                         )
@@ -134,6 +151,34 @@ fun ChatInputBar(
                             modifier = Modifier.size(16.dp)
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.width(2.dp))
+
+                // Microphone Voice-to-Text Button
+                IconButton(
+                    onClick = onStartVoiceInput,
+                    enabled = !isGenerating,
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .then(
+                            if (isVoiceListening) {
+                                Modifier
+                                    .scale(micScale)
+                                    .background(CoralError)
+                            } else {
+                                Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                            }
+                        )
+                        .testTag("voice_input_button")
+                ) {
+                    Icon(
+                        imageVector = if (isVoiceListening) Icons.Default.Stop else Icons.Default.Mic,
+                        contentDescription = if (isVoiceListening) "Listening to microphone" else "Voice to text input",
+                        tint = if (isVoiceListening) PureWhite else PrimaryIndigoLight,
+                        modifier = Modifier.size(20.dp)
+                    )
                 }
 
                 Spacer(modifier = Modifier.width(4.dp))

@@ -1,6 +1,9 @@
 package com.example.ui.screens
 
-import android.widget.Toast
+import android.app.Activity
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -13,7 +16,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -21,36 +23,24 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,21 +51,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.R
-import com.example.ui.theme.ElectricViolet
-import com.example.ui.theme.PrimaryIndigo
-import com.example.ui.theme.PrimaryIndigoLight
+import com.example.ui.theme.CyberBlack
+import com.example.ui.theme.CyberBorder
+import com.example.ui.theme.CyberCardBg
+import com.example.ui.theme.CyberCardElevated
+import com.example.ui.theme.NeonMint
+import com.example.ui.theme.NeonMintDark
+import com.example.ui.theme.NeonMintGlow
 import com.example.ui.theme.PureWhite
-import com.example.ui.theme.Slate400
-import com.example.ui.theme.Slate500
-import com.example.ui.theme.Slate700
-import com.example.ui.theme.Slate800
+import com.example.ui.theme.StatusCoral
+import com.example.ui.theme.TextMuted
+import com.example.ui.theme.TextWhite
 import com.example.ui.viewmodel.ChatViewModel
 
 @Composable
@@ -84,239 +75,263 @@ fun AuthScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    var selectedTab by remember { mutableIntStateOf(0) } // 0 = Sign In, 1 = Sign Up
-
-    var nameInput by remember { mutableStateOf("Ritesh Mishra") }
-    var emailInput by remember { mutableStateOf("ritesh.rm@example.com") }
-    var passwordInput by remember { mutableStateOf("••••••••") }
-    var passwordVisible by remember { mutableStateOf(false) }
-
+    val activity = context as? Activity
+    val isSigningIn by viewModel.isSigningIn.collectAsStateWithLifecycle()
+    val authError by viewModel.authError.collectAsStateWithLifecycle()
     val scrollState = rememberScrollState()
 
     Surface(
         modifier = modifier.fillMaxSize(),
-        color = MaterialTheme.colorScheme.background
+        color = CyberBlack
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .imePadding()
                 .verticalScroll(scrollState)
-                .padding(horizontal = 24.dp, vertical = 20.dp),
+                .padding(horizontal = 24.dp, vertical = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Brand Logo
+            // Glowing Logo Hero
             Box(
                 modifier = Modifier
-                    .size(80.dp)
-                    .shadow(20.dp, CircleShape, spotColor = PrimaryIndigo)
+                    .size(96.dp)
+                    .shadow(24.dp, CircleShape, spotColor = NeonMint)
                     .clip(CircleShape)
                     .background(
                         Brush.radialGradient(
-                            colors = listOf(PrimaryIndigo, Color(0xFF0F172A))
+                            listOf(CyberCardElevated, CyberBlack)
                         )
                     )
-                    .border(2.dp, PrimaryIndigoLight.copy(alpha = 0.6f), CircleShape),
+                    .border(2.dp, NeonMint.copy(alpha = 0.8f), CircleShape),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
                     painter = painterResource(id = R.drawable.rm_ai_logo),
                     contentDescription = "RM AI Logo",
                     modifier = Modifier
-                        .size(56.dp)
+                        .size(68.dp)
                         .clip(CircleShape)
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Text(
                 text = "RM AI",
                 style = MaterialTheme.typography.headlineLarge.copy(
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = (-0.5).sp
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = (-0.5).sp,
+                    fontSize = 32.sp
                 ),
-                color = MaterialTheme.colorScheme.onBackground
+                color = TextWhite
             )
 
             Text(
-                text = "Your intelligent conversation partner",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Slate400,
-                textAlign = TextAlign.Center
+                text = "Your Intelligent Cloud & Multimodal Companion",
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontSize = 14.sp
+                ),
+                color = TextMuted,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp, bottom = 28.dp)
             )
 
-            Spacer(modifier = Modifier.height(28.dp))
-
-            // Card container
+            // Feature Highlights Card
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = CardDefaults.cardColors(containerColor = CyberCardBg),
                 shape = RoundedCornerShape(20.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                border = androidx.compose.foundation.BorderStroke(1.dp, CyberBorder)
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    TabRow(
-                        selectedTabIndex = selectedTab,
-                        containerColor = Color.Transparent,
-                        contentColor = PrimaryIndigo
-                    ) {
-                        Tab(
-                            selected = selectedTab == 0,
-                            onClick = { selectedTab = 0 },
-                            text = {
-                                Text(
-                                    "Sign In",
-                                    style = MaterialTheme.typography.labelLarge.copy(
-                                        fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                )
-                            }
-                        )
-                        Tab(
-                            selected = selectedTab == 1,
-                            onClick = { selectedTab = 1 },
-                            text = {
-                                Text(
-                                    "Create Account",
-                                    style = MaterialTheme.typography.labelLarge.copy(
-                                        fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal
-                                    )
-                                )
-                            }
-                        )
-                    }
-
-                    if (selectedTab == 1) {
-                        OutlinedTextField(
-                            value = nameInput,
-                            onValueChange = { nameInput = it },
-                            label = { Text("Display Name") },
-                            leadingIcon = {
-                                Icon(Icons.Default.Person, contentDescription = null, tint = Slate400)
-                            },
-                            singleLine = true,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .testTag("signup_name_input")
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = emailInput,
-                        onValueChange = { emailInput = it },
-                        label = { Text("Email Address") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Email, contentDescription = null, tint = Slate400)
-                        },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("auth_email_input")
+                    FeatureRow(
+                        icon = Icons.Default.AutoAwesome,
+                        title = "Multimodal AI Chat",
+                        subtitle = "Powered by Google Gemini 3.5 Flash with image understanding"
                     )
-
-                    OutlinedTextField(
-                        value = passwordInput,
-                        onValueChange = { passwordInput = it },
-                        label = { Text("Password") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Lock, contentDescription = null, tint = Slate400)
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                                Icon(
-                                    imageVector = if (passwordVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (passwordVisible) "Hide password" else "Show password",
-                                    tint = Slate400
-                                )
-                            }
-                        },
-                        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("auth_password_input")
+                    FeatureRow(
+                        icon = Icons.Default.CloudDone,
+                        title = "Firebase Cloud Sync",
+                        subtitle = "Continuous encrypted sync for chats, tasks, notes, & memories"
                     )
+                    FeatureRow(
+                        icon = Icons.Default.Mic,
+                        title = "Interactive Voice Assistant",
+                        subtitle = "Speak directly to RM AI with real-time speech recognition"
+                    )
+                    FeatureRow(
+                        icon = Icons.Default.Security,
+                        title = "Secure Google Authentication",
+                        subtitle = "Zero-trust verified access via Jetpack Credential Manager"
+                    )
+                }
+            }
 
-                    Button(
-                        onClick = {
-                            val name = if (selectedTab == 1) nameInput.ifBlank { "User" } else "Ritesh Mishra"
-                            val email = emailInput.ifBlank { "user@rmai.chat" }
-                            viewModel.signIn(name, email)
-                            Toast.makeText(context, "Welcome to RM AI!", Toast.LENGTH_SHORT).show()
-                        },
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Error Banner if needed
+            AnimatedVisibility(
+                visible = authError != null,
+                enter = fadeIn(),
+                exit = fadeOut()
+            ) {
+                authError?.let { err ->
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
-                            .testTag("auth_submit_button"),
-                        colors = ButtonDefaults.buttonColors(containerColor = PrimaryIndigo),
+                            .padding(bottom = 16.dp),
+                        colors = CardDefaults.cardColors(containerColor = StatusCoral.copy(alpha = 0.15f)),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, StatusCoral.copy(alpha = 0.5f)),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
-                            text = if (selectedTab == 0) "Sign In" else "Create Account",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = PureWhite
-                        )
-                    }
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
-                        Text(
-                            text = "  or  ",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = Slate400
-                        )
-                        HorizontalDivider(modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.outlineVariant)
-                    }
-
-                    // Continue with Google
-                    OutlinedButton(
-                        onClick = {
-                            viewModel.signIn("Ritesh Mishra", "ritesh.rm871@gmail.com")
-                            Toast.makeText(context, "Signed in with Google account", Toast.LENGTH_SHORT).show()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp)
-                            .testTag("google_signin_button"),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text(
-                            text = "Continue with Google",
-                            style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold),
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-
-                    // Continue as Guest (Fast instant start)
-                    TextButton(
-                        onClick = {
-                            viewModel.signIn("Guest User", "guest@rmai.local")
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            text = "Start Immediately as Guest →",
-                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.Medium),
-                            color = PrimaryIndigoLight
+                            text = err,
+                            color = StatusCoral,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(14.dp),
+                            textAlign = TextAlign.Center
                         )
                     }
                 }
             }
 
+            // Primary Google Sign-In Action
+            Button(
+                onClick = {
+                    activity?.let { act ->
+                        viewModel.initiateGoogleSignIn(act)
+                    }
+                },
+                enabled = !isSigningIn,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .testTag("google_signin_button"),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = PureWhite,
+                    contentColor = CyberBlack,
+                    disabledContainerColor = PureWhite.copy(alpha = 0.6f)
+                ),
+                shape = RoundedCornerShape(14.dp),
+                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+            ) {
+                if (isSigningIn) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(22.dp),
+                        color = CyberBlack,
+                        strokeWidth = 2.5.dp
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Authenticating with Google...",
+                        style = MaterialTheme.typography.labelLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        ),
+                        color = CyberBlack
+                    )
+                } else {
+                    // Google G Icon / Sign In Label
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "G",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Black,
+                                fontSize = 18.sp
+                            ),
+                            color = Color(0xFF4285F4)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Text(
+                            text = "Sign in with Google",
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            ),
+                            color = Color(0xFF1F2937)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            // Continue in Guest/Offline Mode
+            TextButton(
+                onClick = {
+                    viewModel.continueAsGuest()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("continue_as_guest_button")
+            ) {
+                Text(
+                    text = "Continue to App (Offline / Guest Mode) →",
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 13.sp
+                    ),
+                    color = NeonMint
+                )
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
+        }
+    }
+}
+
+@Composable
+private fun FeatureRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(CyberCardElevated)
+                .border(1.dp, CyberBorder, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = NeonMint,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
+        Spacer(modifier = Modifier.width(14.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 14.sp
+                ),
+                color = TextWhite
+            )
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp),
+                color = TextMuted
+            )
         }
     }
 }
